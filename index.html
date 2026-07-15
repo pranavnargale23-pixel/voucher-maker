@@ -9,7 +9,20 @@
     <header><div><p class="eyebrow">EXPENSE REIMBURSEMENTS</p><h1>Voucher Maker</h1><p class="subhead">Record expenses as they happen. Generate one HR-ready PDF with all supporting receipts.</p></div><div class="total-card"><span>Total claimed</span><strong id="total">Rs. 0.00</strong><small id="itemCount">0 expenses</small></div></header>
     <section class="card voucher-details"><h2>Voucher details</h2><div class="grid four"><label>Firm name<input id="firm" value="Manohar Chowdhry & Associates - Mumbai"></label><label>Pay to<input id="payee" placeholder="Your name"></label><label>Voucher date<input id="voucherDate" type="date"></label><label>Payment mode<select id="paymentMode"><option>Cash</option><option>Bank</option><option>Cheque</option><option>UPI</option><option>NEFT/RTGS</option><option>Others</option></select></label></div><label>Narration<input id="narration" value="Reimbursement for travelling expenses"></label></section>
     
-    <section class="card add-expense"><div class="section-head"><div><h2>Add an expense</h2><p>Choose the date of the expense; the time of entry is saved automatically.</p></div><button class="primary" id="addExpense">Save expense</button></div><div class="grid five"><label>Expense date<input id="expenseDate" type="date"></label><label>Description<input id="description" placeholder="e.g. Auto from client office to station"></label><label>Client name<input id="client" placeholder="e.g. Colossa Ventures"></label><label>Amount (Rs.)<input id="amount" type="number" min="0" step="0.01" placeholder="0.00"></label><label>Account head<select id="accountHead"><option>Travelling Expenses</option><option>Petrol & Conveyance</option><option>Staff Welfare</option><option>Filing Fees</option><option>General Office Expenses</option><option>Photocopying Charges</option><option>Postage & Courier</option><option>Payment on Behalf of Client</option></select></label></div><label class="upload"><span>Supporting receipt (image or PDF)</span><input id="receipt" type="file" accept="image/*,application/pdf"><small>On a phone, you can take a receipt photo directly with the camera or choose a PDF.</small></label></section>
+    <section class="card add-expense">
+      <div class="section-head">
+        <div>
+          <h2>Add an expense</h2>
+          <p>Choose the date of the expense; the time of entry is saved automatically.</p>
+        </div>
+      </div>
+      <div class="grid five"><label>Expense date<input id="expenseDate" type="date"></label><label>Description<input id="description" placeholder="e.g. Auto from client office to station"></label><label>Client name<input id="client" placeholder="e.g. Colossa Ventures"></label><label>Amount (Rs.)<input id="amount" type="number" min="0" step="0.01" placeholder="0.00"></label><label>Account head<select id="accountHead"><option>Travelling Expenses</option><option>Petrol & Conveyance</option><option>Staff Welfare</option><option>Filing Fees</option><option>General Office Expenses</option><option>Photocopying Charges</option><option>Postage & Courier</option><option>Payment on Behalf of Client</option></select></label></div>
+      <label class="upload"><span>Supporting receipt (image or PDF)</span><input id="receipt" type="file" accept="image/*,application/pdf"><small>On a phone, you can take a receipt photo directly with the camera or choose a PDF.</small></label>
+      
+      <div style="margin-top: 20px; text-align: right;">
+        <button class="primary" id="addExpense">Save expense</button>
+      </div>
+    </section>
     
     <section class="card"><div class="section-head"><div><h2>Expense list</h2><p>Review or remove expenses before generating the voucher.</p></div><button class="secondary" id="clearAll">Clear all</button></div><div class="table-wrap"><table><thead><tr><th>Expense date</th><th>Description</th><th>Client name</th><th>Account head</th><th>Amount</th><th>Receipt</th><th></th></tr></thead><tbody id="expenseRows"><tr class="empty"><td colspan="7">No expenses saved yet.</td></tr></tbody></table></div></section>
     
