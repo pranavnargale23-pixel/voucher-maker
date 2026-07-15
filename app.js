@@ -3,9 +3,10 @@ const today = new Date();
 $('voucherDate').value = today.toISOString().slice(0,10);
 $('expenseDate').value = today.toISOString().slice(0,10);
 
-// 1. INITIALIZE LOCAL ENGINE DATABASE (IndexedDB)
+// 1. ROBUST ASYNC DATABASE INITIALIZATION
 let db;
-const dbRequest = indexedDB.open("VoucherMakerDB", 2);
+// Using a completely fresh database name 'VoucherEngineDB' to bypass stuck mobile versions
+const dbRequest = indexedDB.open("VoucherEngineDB", 1);
 
 dbRequest.onupgradeneeded = e => {
     db = e.target.result;
@@ -16,12 +17,15 @@ dbRequest.onupgradeneeded = e => {
 
 dbRequest.onsuccess = e => {
     db = e.target.result;
-    loadExpensesFromDevice(); 
+    loadExpensesFromDevice(); // Safely render data once connected
 };
 
-dbRequest.onerror = () => toast("Local device storage failed to initialize.");
+dbRequest.onerror = e => {
+    console.error("Database Error:", e.target.error);
+    alert("Storage Error: " + e.target.error.message);
+};
 
-// Keep basic structural form items saved locally
+// Auto-save generic text elements
 ['firm','payee','narration'].forEach(id => { 
     const v = localStorage.getItem('voucher-'+id); 
     if(v) $(id).value = v; 
@@ -44,7 +48,7 @@ function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currenc
 function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
 
-// 2. RETRIEVE AND RENDER DATA DIRECTLY FROM LOCAL DEVICE HARDWARE
+// 2. RENDER STABILIZED DATA ROWS
 function loadExpensesFromDevice() {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readonly");
@@ -52,7 +56,7 @@ function loadExpensesFromDevice() {
     const request = store.getAll();
 
     request.onsuccess = () => {
-        const expensesList = request.result;
+        const expensesList = request.result || [];
         const body = $('expenseRows'); 
         const total = expensesList.reduce((n,x) => n + x.amount, 0); 
         $('total').textContent = money(total);
@@ -70,12 +74,16 @@ function loadExpensesFromDevice() {
             </tr>
         `).join('') : '<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
     };
+    
+    request.onerror = e => console.error("Failed to fetch expenses:", e.target.error);
 }
 
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 
-// 3. SECURELY STORE EXPENSE TEXT & PHYSICAL BLOB ATTACHMENT NATIVELY
+// 3. FAIL-SAFE WRITE INTERACTION WITH EXPLICIT ERROR CAPTURE
 $('addExpense').onclick = async () => {
+    if (!db) return alert("Database engine is still initializing. Please wait a moment or refresh the page.");
+
     const expenseDate = $('expenseDate').value;
     const description = $('description').value.trim();
     const client = $('client').value.trim();
@@ -95,34 +103,53 @@ $('addExpense').onclick = async () => {
         amount,
         accountHead: $('accountHead').value,
         fileName: file ? file.name : '',
-        fileBlob: file || null // IndexedDB securely stores standard file data chunks natively
+        fileBlob: file || null
     };
 
-    const transaction = db.transaction(["expenses"], "readwrite");
-    const store = transaction.objectStore("expenses");
-    store.add(newExpense);
+    try {
+        const transaction = db.transaction(["expenses"], "readwrite");
+        const store = transaction.objectStore("expenses");
+        const addRequest = store.add(newExpense);
 
-    transaction.oncomplete = () => {
-        ['description','client','amount'].forEach(id => $(id).value = '');
-        $('receipt').value = '';
-        loadExpensesFromDevice();
-        toast('Expense and receipt saved locally!');
-    };
+        addRequest.onsuccess = () => {
+            ['description','client','amount'].forEach(id => $(id).value = '');
+            $('receipt').value = '';
+            loadExpensesFromDevice();
+            toast('Expense and receipt saved locally!');
+        };
+
+        addRequest.onerror = e => {
+            console.error("Add Request Error:", e.target.error);
+            alert("Failed to write to database: " + e.target.error.message);
+        };
+        
+        transaction.onerror = e => {
+            console.error("Transaction Error:", e.target.error);
+        };
+    } catch (err) {
+        console.error("Execution Crash:", err);
+        alert("System error saving record: " + err.message);
+    }
 };
 
-// 4. ERASE INDIVIDUAL PARAMETERS
+// 4. UNLINK RECORD
 window.deleteExpense = (id) => {
+    if (!db) return;
     const transaction = db.transaction(["expenses"], "readwrite");
     const store = transaction.objectStore("expenses");
-    store.delete(id);
+    const deleteRequest = store.delete(id);
+    
     transaction.oncomplete = () => {
         loadExpensesFromDevice();
         toast('Expense removed.');
     };
+    
+    deleteRequest.onerror = e => alert("Could not delete record: " + e.target.error.message);
 };
 
-// 5. PURGE DATABASE WIPE
+// 5. PURGE ALL ENTRIES
 $('clearAll').onclick = () => {
+    if (!db) return;
     if (confirm('Clear all saved expenses from this device?')) {
         const transaction = db.transaction(["expenses"], "readwrite");
         const store = transaction.objectStore("expenses");
@@ -188,7 +215,6 @@ async function voucherPage(pdf, expensesList){
     text(page,'Rupees in words: '+words(total),38,y,9,true);
     y-=25;
 
-    // --- DRAW PERSONNEL CLIENT ALLOCATION TABLE ---
     const allocRows = document.querySelectorAll('#allocationRows tr');
     if (allocRows.length > 0) {
         page.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
@@ -268,7 +294,7 @@ async function appendReceipt(pdf, fileData, fileName) {
     page.drawImage(image, {x:(width-image.width*scale)/2, y:(height-image.height*scale)/2-4, width:image.width*scale, height:image.height*scale});
 }
 
-// 6. COMPILE EVERYTHING LOGGED NATIVELY FROM ACCOUNT ON GENERATE CLICK
+// 6. BUILD MERGED EXPENSE MANIFEST FROM LOGGED OBJECT ARRAY
 $('generate').onclick = async () => {
     if (!db) return toast("Database engine not ready.");
     const transaction = db.transaction(["expenses"], "readonly");
@@ -276,7 +302,7 @@ $('generate').onclick = async () => {
     const request = store.getAll();
 
     request.onsuccess = async () => {
-        const expensesList = request.result;
+        const expensesList = request.result || [];
         if (!expensesList.length) return toast('Add at least one expense first.');
         if (!$('payee').value.trim()) return toast('Please enter the payee name.');
         
