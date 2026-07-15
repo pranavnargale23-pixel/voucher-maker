@@ -1,9 +1,32 @@
 const $ = id => document.getElementById(id);
-let expenses = JSON.parse(localStorage.getItem('voucher-expenses') || '[]');
-let receipts = new Map();
 const today = new Date();
 $('voucherDate').value = today.toISOString().slice(0,10);
 $('expenseDate').value = today.toISOString().slice(0,10);
+
+// 1. INITIALIZE LOCAL ENGINE DATABASE (IndexedDB)
+let db;
+const dbRequest = indexedDB.open("VoucherMakerDB", 2);
+
+dbRequest.onupgradeneeded = e => {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains("expenses")) {
+        db.createObjectStore("expenses", { keyPath: "createdAt" });
+    }
+};
+
+dbRequest.onsuccess = e => {
+    db = e.target.result;
+    loadExpensesFromDevice(); 
+};
+
+dbRequest.onerror = () => toast("Local device storage failed to initialize.");
+
+// Keep basic structural form items saved locally
+['firm','payee','narration'].forEach(id => { 
+    const v = localStorage.getItem('voucher-'+id); 
+    if(v) $(id).value = v; 
+    $(id).addEventListener('input', () => localStorage.setItem('voucher-'+id, $(id).value)); 
+});
 
 // Dynamic Row Builder for the new Allocation Grid
 $('addAllocationRow').onclick = () => {
@@ -17,48 +40,99 @@ $('addAllocationRow').onclick = () => {
     tbody.appendChild(newRow);
 };
 
-['firm','payee','narration'].forEach(id => { 
-    const v=localStorage.getItem('voucher-'+id); 
-    if(v) $(id).value=v; 
-    $(id).addEventListener('input',()=>localStorage.setItem('voucher-'+id,$(id).value)); 
-});
-
 function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n)}
 function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
 
-function render(){
-    const body=$('expenseRows'); 
-    const total=expenses.reduce((n,x)=>n+x.amount,0); 
-    $('total').textContent=money(total);
-    $('itemCount').textContent=`${expenses.length} expense${expenses.length===1?'':'s'}`; 
-    body.innerHTML=expenses.length?expenses.map((x,i)=>`<tr><td>${savedExpenseDate(x).toLocaleDateString('en-IN',{dateStyle:'medium'})}</td><td>${esc(x.description)}</td><td>${esc(x.client)}</td><td>${esc(x.accountHead)}</td><td class="amount">${money(x.amount)}</td><td>${x.fileName?'<span class="receipt">Attached</span>':'-'}</td><td><button class="remove" data-index="${i}">Remove</button></td></tr>`).join(''):'<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
-    localStorage.setItem('voucher-expenses',JSON.stringify(expenses));
+// 2. RETRIEVE AND RENDER DATA DIRECTLY FROM LOCAL DEVICE HARDWARE
+function loadExpensesFromDevice() {
+    if (!db) return;
+    const transaction = db.transaction(["expenses"], "readonly");
+    const store = transaction.objectStore("expenses");
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+        const expensesList = request.result;
+        const body = $('expenseRows'); 
+        const total = expensesList.reduce((n,x) => n + x.amount, 0); 
+        $('total').textContent = money(total);
+        $('itemCount').textContent = `${expensesList.length} expense${expensesList.length === 1 ? '' : 's'}`; 
+        
+        body.innerHTML = expensesList.length ? expensesList.map((x) => `
+            <tr>
+                <td>${savedExpenseDate(x).toLocaleDateString('en-IN',{dateStyle:'medium'})}</td>
+                <td>${esc(x.description)}</td>
+                <td>${esc(x.client)}</td>
+                <td>${esc(x.accountHead)}</td>
+                <td class="amount">${money(x.amount)}</td>
+                <td>${x.fileBlob ? '<span class="receipt">Attached</span>' : '-'}</td>
+                <td><button class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button></td>
+            </tr>
+        `).join('') : '<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
+    };
 }
 
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 
-$('addExpense').onclick=async()=>{
-    const expenseDate=$('expenseDate').value,description=$('description').value.trim(),client=$('client').value.trim(),amount=Number($('amount').value), file=$('receipt').files[0]; 
-    if(!expenseDate||!description||!client||!amount||amount<=0)return toast('Please enter expense date, description, client name and amount.'); 
-    const e={expenseDate,description,client,amount,accountHead:$('accountHead').value,createdAt:new Date().toISOString(),fileName:file?.name||''}; 
-    if(file)receipts.set(e.createdAt,file); 
-    expenses.push(e); 
-    ['description','client','amount'].forEach(id=>$(id).value='');
-    $('receipt').value='';
-    render();
-    toast('Expense saved.');
+// 3. SECURELY STORE EXPENSE TEXT & PHYSICAL BLOB ATTACHMENT NATIVELY
+$('addExpense').onclick = async () => {
+    const expenseDate = $('expenseDate').value;
+    const description = $('description').value.trim();
+    const client = $('client').value.trim();
+    const amount = Number($('amount').value);
+    const file = $('receipt').files[0]; 
+
+    if (!expenseDate || !description || !client || !amount || amount <= 0) {
+        return toast('Please enter expense date, description, client name and amount.');
+    }
+
+    const createdAt = new Date().toISOString();
+    const newExpense = {
+        createdAt,
+        expenseDate,
+        description,
+        client,
+        amount,
+        accountHead: $('accountHead').value,
+        fileName: file ? file.name : '',
+        fileBlob: file || null // IndexedDB securely stores standard file data chunks natively
+    };
+
+    const transaction = db.transaction(["expenses"], "readwrite");
+    const store = transaction.objectStore("expenses");
+    store.add(newExpense);
+
+    transaction.oncomplete = () => {
+        ['description','client','amount'].forEach(id => $(id).value = '');
+        $('receipt').value = '';
+        loadExpensesFromDevice();
+        toast('Expense and receipt saved locally!');
+    };
 };
 
-$('expenseRows').onclick=e=>{
-    const i=e.target.dataset.index;
-    if(i===undefined)return;
-    receipts.delete(expenses[i].createdAt);
-    expenses.splice(i,1);
-    render()
+// 4. ERASE INDIVIDUAL PARAMETERS
+window.deleteExpense = (id) => {
+    const transaction = db.transaction(["expenses"], "readwrite");
+    const store = transaction.objectStore("expenses");
+    store.delete(id);
+    transaction.oncomplete = () => {
+        loadExpensesFromDevice();
+        toast('Expense removed.');
+    };
 };
 
-$('clearAll').onclick=()=>{if(confirm('Clear all saved expenses?')){expenses=[];receipts.clear();render()}};
+// 5. PURGE DATABASE WIPE
+$('clearAll').onclick = () => {
+    if (confirm('Clear all saved expenses from this device?')) {
+        const transaction = db.transaction(["expenses"], "readwrite");
+        const store = transaction.objectStore("expenses");
+        store.clear();
+        transaction.oncomplete = () => {
+            loadExpensesFromDevice();
+            toast('Device database cleared.');
+        };
+    }
+};
 
 function words(n){const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];const f=x=>x<20?a[x]:x<100?b[Math.floor(x/10)]+(x%10?' '+a[x%10]:''):x<1000?a[Math.floor(x/100)]+' Hundred'+(x%100?' '+f(x%100):''):x<100000?f(Math.floor(x/1000))+' Thousand'+(x%1000?' '+f(x%1000):''):f(Math.floor(x/100000))+' Lakh'+(x%100000?' '+f(x%100000):'');return f(Math.round(n))+' rupees only';}
 function text(page,value,x,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){page.drawText(String(value||''),{x,y,size,font:bold?window.fontBold:window.font, color});}
@@ -66,7 +140,7 @@ function centeredText(page,value,x,y,width,size=10,bold=false,color=PDFLib.rgb(.
 function rightText(page,value,right,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){const font=bold?window.fontBold:window.font;const label=String(value||'');page.drawText(label,{x:right-font.widthOfTextAtSize(label,size),y,size,font,color});}
 function line(page,x1,y1,x2,y2,w=1){page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.55,.59,.65)});}
 
-async function voucherPage(pdf){
+async function voucherPage(pdf, expensesList){
     const page=pdf.addPage([612,792]),{height:h}=page.getSize();
     window.font=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
     window.fontBold=await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
@@ -78,7 +152,7 @@ async function voucherPage(pdf){
     text(page,'Voucher No.:',390,h-32,9,false,PDFLib.rgb(.85,.97,.95));
     text(page,'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}),390,h-49,9,false,PDFLib.rgb(.85,.97,.95));
     
-    const total=expenses.reduce((n,x)=>n+x.amount,0);
+    const total=expensesList.reduce((n,x)=>n+x.amount,0);
     let y=680;
     
     [['Pay To',$('payee').value],['Paid by',$('paymentMode').value],['Narration',$('narration').value]].forEach(([l,v])=>{
@@ -89,7 +163,7 @@ async function voucherPage(pdf){
     });
     
     const accounts=['Filing Fees','General Office Expenses','Payment on Behalf of Client','Petrol & Conveyance','Photocopying Charges','Postage & Courier','Staff Welfare','Travelling Expenses'],sums=Object.fromEntries(accounts.map(a=>[a,0])),aCols=[38,244,306,512,574],accountTop=y;
-    expenses.forEach(e=>sums[e.accountHead]=(sums[e.accountHead]||0)+e.amount);
+    expensesList.forEach(e=>sums[e.accountHead]=(sums[e.accountHead]||0)+e.amount);
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:teal});
     [['Account Head',0],['Rupees',1],['Account Head',2],['Rupees',3]].forEach(([v,i])=>centeredText(page,v,aCols[i],y-15,aCols[i+1]-aCols[i],8,true,white));
@@ -153,7 +227,7 @@ async function voucherPage(pdf){
     heads.forEach((v,i)=>centeredText(page,v,dCols[i],y-15,dCols[i+1]-dCols[i],8,true,white));
     y-=22;
     
-    expenses.forEach(e=>{
+    expensesList.forEach(e=>{
         if(y<70)return;
         text(page,savedExpenseDate(e).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}),dCols[0]+4,y-14,8);
         text(page,e.description.slice(0,40),dCols[1]+4,y-14,8);
@@ -171,56 +245,68 @@ async function voucherPage(pdf){
     return page;
 }
 
-async function appendReceipt(pdf,file){
-    const bytes=await file.arrayBuffer();
-    if(file.type==='application/pdf'||file.name.toLowerCase().endsWith('.pdf')){
-        try{
-            const src=await PDFLib.PDFDocument.load(bytes);
-            const pages=await pdf.copyPages(src,src.getPageIndices());
-            pages.forEach(p=>pdf.addPage(p));
-            return
-        }catch{
-            throw new Error(`${file.name} could not be read as a PDF.`)
+async function appendReceipt(pdf, fileData, fileName) {
+    const bytes = await fileData.arrayBuffer();
+    if (fileData.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+        try {
+            const src = await PDFLib.PDFDocument.load(bytes);
+            const pages = await pdf.copyPages(src, src.getPageIndices());
+            pages.forEach(p => pdf.addPage(p));
+            return;
+        } catch {
+            throw new Error(`${fileName} could not be read as a PDF.`);
         }
     }
     let image;
-    try{
-        image=file.type.includes('png')?await pdf.embedPng(bytes):await pdf.embedJpg(bytes)
-    }catch{
-        throw new Error(`${file.name} is not a supported image.`)
+    try {
+        image = fileData.type.includes('png') ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+    } catch {
+        throw new Error(`${fileName} is not a supported image.`);
     }
-    const page=pdf.addPage(PDFLib.PageSizes.A4),{width,height}=page.getSize(),scale=Math.min((width-48)/image.width,(height-48)/image.height,1);
-    page.drawText('Supporting receipt - '+file.name,{x:24,y:height-22,size:8,font:window.font});
-    page.drawImage(image,{x:(width-image.width*scale)/2,y:(height-image.height*scale)/2-4,width:image.width*scale,height:image.height*scale});
+    const page = pdf.addPage(PDFLib.PageSizes.A4), {width, height} = page.getSize(), scale = Math.min((width-48)/image.width, (height-48)/image.height, 1);
+    page.drawText('Supporting receipt - ' + fileName, {x:24, y:height-22, size:8, font:window.font});
+    page.drawImage(image, {x:(width-image.width*scale)/2, y:(height-image.height*scale)/2-4, width:image.width*scale, height:image.height*scale});
 }
 
-$('generate').onclick=async()=>{
-    if(!expenses.length)return toast('Add at least one expense first.');
-    if(!$('payee').value.trim())return toast('Please enter the payee name.');
-    const btn=$('generate');
-    btn.disabled=true;
-    btn.textContent='Preparing PDF...';
-    try{
-        const pdf=await PDFLib.PDFDocument.create();
-        await voucherPage(pdf);
-        for(const e of expenses){
-            const f=receipts.get(e.createdAt);
-            if(f)await appendReceipt(pdf,f)
-        }
-        const out=await pdf.save();
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(new Blob([out],{type:'application/pdf'}));
-        a.download=`Cash Voucher - ${$('voucherDate').value}.pdf`;
-        a.click();
-        URL.revokeObjectURL(a.href);
-        toast('Your final voucher PDF is ready.');
-    }catch(err){
-        console.error(err);
-        toast(err.message||'Could not create the PDF.')
-    }finally{
-        btn.disabled=false;
-        btn.textContent='Generate final voucher PDF';
-    }
-};
+// 6. COMPILE EVERYTHING LOGGED NATIVELY FROM ACCOUNT ON GENERATE CLICK
+$('generate').onclick = async () => {
+    if (!db) return toast("Database engine not ready.");
+    const transaction = db.transaction(["expenses"], "readonly");
+    const store = transaction.objectStore("expenses");
+    const request = store.getAll();
 
-render();
+    request.onsuccess = async () => {
+        const expensesList = request.result;
+        if (!expensesList.length) return toast('Add at least one expense first.');
+        if (!$('payee').value.trim()) return toast('Please enter the payee name.');
+        
+        const btn = $('generate');
+        btn.disabled = true;
+        btn.textContent = 'Preparing PDF...';
+        
+        try {
+            const pdf = await PDFLib.PDFDocument.create();
+            await voucherPage(pdf, expensesList);
+            
+            for (const e of expensesList) {
+                if (e.fileBlob) {
+                    await appendReceipt(pdf, e.fileBlob, e.fileName);
+                }
+            }
+            
+            const out = await pdf.save();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(new Blob([out], {type:'application/pdf'}));
+            a.download = `Cash Voucher - ${$('voucherDate').value}.pdf`;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            toast('Your final voucher PDF is ready.');
+        } catch (err) {
+            console.error(err);
+            toast(err.message || 'Could not create the PDF.');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Generate final voucher PDF';
+        }
+    };
+};
