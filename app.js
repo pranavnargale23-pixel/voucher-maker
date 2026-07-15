@@ -3,9 +3,8 @@ const today = new Date();
 $('voucherDate').value = today.toISOString().slice(0,10);
 $('expenseDate').value = today.toISOString().slice(0,10);
 
-// 1. ROBUST ASYNC DATABASE INITIALIZATION
+// 1. ASYNC DATABASE INITIALIZATION
 let db;
-// Using a completely fresh database name 'VoucherEngineDB' to bypass stuck mobile versions
 const dbRequest = indexedDB.open("VoucherEngineDB", 1);
 
 dbRequest.onupgradeneeded = e => {
@@ -17,7 +16,7 @@ dbRequest.onupgradeneeded = e => {
 
 dbRequest.onsuccess = e => {
     db = e.target.result;
-    loadExpensesFromDevice(); // Safely render data once connected
+    loadExpensesFromDevice(); 
 };
 
 dbRequest.onerror = e => {
@@ -25,14 +24,14 @@ dbRequest.onerror = e => {
     alert("Storage Error: " + e.target.error.message);
 };
 
-// Auto-save generic text elements
+// Auto-save form inputs
 ['firm','payee','narration'].forEach(id => { 
     const v = localStorage.getItem('voucher-'+id); 
     if(v) $(id).value = v; 
     $(id).addEventListener('input', () => localStorage.setItem('voucher-'+id, $(id).value)); 
 });
 
-// Dynamic Row Builder for the new Allocation Grid
+// Dynamic Allocation Row Builder
 $('addAllocationRow').onclick = () => {
     const tbody = $('allocationRows');
     const newRow = document.createElement('tr');
@@ -48,7 +47,7 @@ function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currenc
 function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
 
-// 2. RENDER STABILIZED DATA ROWS
+// 2. FETCH FROM DEVICE STORAGE AND RENDER TO LIST
 function loadExpensesFromDevice() {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readonly");
@@ -70,19 +69,17 @@ function loadExpensesFromDevice() {
                 <td>${esc(x.accountHead)}</td>
                 <td class="amount">${money(x.amount)}</td>
                 <td>${x.fileBlob ? '<span class="receipt">Attached</span>' : '-'}</td>
-                <td><button class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button></td>
+                <td><button type="button" class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button></td>
             </tr>
         `).join('') : '<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
     };
-    
-    request.onerror = e => console.error("Failed to fetch expenses:", e.target.error);
 }
 
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 
-// 3. FAIL-SAFE WRITE INTERACTION WITH EXPLICIT ERROR CAPTURE
+// 3. PERSIST RAW FILE AND TRANSACTION VALUES NATIVELY
 $('addExpense').onclick = async () => {
-    if (!db) return alert("Database engine is still initializing. Please wait a moment or refresh the page.");
+    if (!db) return alert("Database storage engine is initializing. Please try again in a brief second.");
 
     const expenseDate = $('expenseDate').value;
     const description = $('description').value.trim();
@@ -106,48 +103,33 @@ $('addExpense').onclick = async () => {
         fileBlob: file || null
     };
 
-    try {
-        const transaction = db.transaction(["expenses"], "readwrite");
-        const store = transaction.objectStore("expenses");
-        const addRequest = store.add(newExpense);
+    const transaction = db.transaction(["expenses"], "readwrite");
+    const store = transaction.objectStore("expenses");
+    const addRequest = store.add(newExpense);
 
-        addRequest.onsuccess = () => {
-            ['description','client','amount'].forEach(id => $(id).value = '');
-            $('receipt').value = '';
-            loadExpensesFromDevice();
-            toast('Expense and receipt saved locally!');
-        };
+    addRequest.onsuccess = () => {
+        ['description','client','amount'].forEach(id => $(id).value = '');
+        $('receipt').value = '';
+        loadExpensesFromDevice();
+        toast('Expense and receipt saved locally!');
+    };
 
-        addRequest.onerror = e => {
-            console.error("Add Request Error:", e.target.error);
-            alert("Failed to write to database: " + e.target.error.message);
-        };
-        
-        transaction.onerror = e => {
-            console.error("Transaction Error:", e.target.error);
-        };
-    } catch (err) {
-        console.error("Execution Crash:", err);
-        alert("System error saving record: " + err.message);
-    }
+    addRequest.onerror = e => alert("Failed to save data entry: " + e.target.error.message);
 };
 
-// 4. UNLINK RECORD
+// 4. REMOVE RECORD NATIVELY
 window.deleteExpense = (id) => {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readwrite");
     const store = transaction.objectStore("expenses");
-    const deleteRequest = store.delete(id);
-    
+    store.delete(id);
     transaction.oncomplete = () => {
         loadExpensesFromDevice();
         toast('Expense removed.');
     };
-    
-    deleteRequest.onerror = e => alert("Could not delete record: " + e.target.error.message);
 };
 
-// 5. PURGE ALL ENTRIES
+// 5. PURGE DEVICE DATA STORE
 $('clearAll').onclick = () => {
     if (!db) return;
     if (confirm('Clear all saved expenses from this device?')) {
@@ -294,7 +276,7 @@ async function appendReceipt(pdf, fileData, fileName) {
     page.drawImage(image, {x:(width-image.width*scale)/2, y:(height-image.height*scale)/2-4, width:image.width*scale, height:image.height*scale});
 }
 
-// 6. BUILD MERGED EXPENSE MANIFEST FROM LOGGED OBJECT ARRAY
+// 6. COMPILE LEDGER
 $('generate').onclick = async () => {
     if (!db) return toast("Database engine not ready.");
     const transaction = db.transaction(["expenses"], "readonly");
