@@ -5,7 +5,7 @@ $('expenseDate').value = today.toISOString().slice(0,10);
 
 // 1. ASYNC DATABASE INITIALIZATION
 let db;
-const dbRequest = indexedDB.open("VoucherEngineDB", 3); // Bumped version to reset schema smoothly
+const dbRequest = indexedDB.open("VoucherEngineDB", 3);
 
 dbRequest.onupgradeneeded = e => {
     db = e.target.result;
@@ -48,7 +48,6 @@ function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currenc
 function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
 
-// Helper to convert File to safe mobile Base64 String data
 function readFileAsBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -142,7 +141,6 @@ $('addExpense').onclick = async () => {
     addRequest.onerror = e => alert("Failed to save data entry: " + e.target.error.message);
 };
 
-// 4. REMOVE RECORD NATIVELY
 window.deleteExpense = (id) => {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readwrite");
@@ -154,7 +152,6 @@ window.deleteExpense = (id) => {
     };
 };
 
-// 5. PURGE DEVICE DATA STORE
 $('clearAll').onclick = () => {
     if (!db) return;
     if (confirm('Clear all saved expenses from this device?')) {
@@ -220,34 +217,8 @@ async function voucherPage(pdf, expensesList){
     
     y-=34;
     text(page,'Rupees in words: '+words(total),38,y,9,true);
+    
     y-=25;
-
-    const allocRows = document.querySelectorAll('#allocationRows tr');
-    if (allocRows.length > 0) {
-        page.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
-        centeredText(page, 'Personnel Name', 38, y - 12, 200, 8, true, white);
-        centeredText(page, 'Assigned Client Accounts', 238, y - 12, 336, 8, true, white);
-        y -= 18;
-        
-        const tableStart = y;
-        allocRows.forEach(row => {
-            const person = row.querySelector('.alloc-person').value.trim();
-            const clientVal = row.querySelector('.alloc-client').value.trim();
-            
-            if (person || clientVal) {
-                text(page, person, 45, y - 14, 8);
-                text(page, clientVal, 245, y - 14, 8);
-                line(page, 38, y - 20, 574, y - 20, .4);
-                y -= 20;
-            }
-        });
-        
-        line(page, 38, tableStart, 38, y, .4);
-        line(page, 238, tableStart, 238, y, .4);
-        line(page, 574, tableStart, 574, y, .4);
-    }
-
-    y-=15;
     line(page,38,y,574,y,.7);
     text(page,$('payee').value,38,y-16,8);
     text(page,'Prepared by',38,y-29,8,true);
@@ -271,15 +242,50 @@ async function voucherPage(pdf, expensesList){
     });
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
-    centeredText(page,'TOTAL',dCols[2],y-15,dCols[3]-dCols[2],8,true);
+    centeredText(page,'TOTAL', dCols[2],y-15,dCols[3]-dCols[2],8,true);
     rightText(page,total.toFixed(2),dCols[4]-5,y-15,8,true);
     dCols.forEach(x=>line(page,x,detailTop,x,y-22,.4));
+
+    // --- NEW PLACEMENT: PERSONNEL CLIENT ALLOCATION TABLE DRAWS DYNAMICALLY HERE AFTER PARTICULARS ---
+    y-=25;
+    const allocRows = document.querySelectorAll('#allocationRows tr');
+    let hasData = false;
+    
+    // Scan if columns have any values filled out before processing structural lines
+    allocRows.forEach(row => {
+        if(row.querySelector('.alloc-person').value.trim() || row.querySelector('.alloc-client').value.trim()) {
+            hasData = true;
+        }
+    });
+
+    if (hasData && y > 90) {
+        page.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
+        centeredText(page, 'Personnel Name', 38, y - 12, 200, 8, true, white);
+        centeredText(page, 'Assigned Client Accounts', 238, y - 12, 336, 8, true, white);
+        y -= 18;
+        
+        const tableStart = y;
+        allocRows.forEach(row => {
+            const person = row.querySelector('.alloc-person').value.trim();
+            const clientVal = row.querySelector('.alloc-client').value.trim();
+            
+            if (person || clientVal) {
+                text(page, person, 45, y - 14, 8);
+                text(page, clientVal, 245, y - 14, 8);
+                line(page, 38, y - 20, 574, y - 20, .4);
+                y -= 20;
+            }
+        });
+        
+        line(page, 38, tableStart, 38, y, .4);
+        line(page, 238, tableStart, 238, y, .4);
+        line(page, 574, tableStart, 574, y, .4);
+    }
     
     return page;
 }
 
 async function appendReceipt(pdf, fileDataStr, fileType, fileName) {
-    // Decode Base64 string back into ArrayBuffer chunks for pdf-lib parsing
     const base64Content = fileDataStr.split(',')[1];
     const binaryStr = atob(base64Content);
     const len = binaryStr.length;
