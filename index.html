@@ -10,6 +10,33 @@
     <section class="card voucher-details"><h2>Voucher details</h2><div class="grid four"><label>Firm name<input id="firm" value="Manohar Chowdhry & Associates - Mumbai"></label><label>Pay to<input id="payee" placeholder="Your name"></label><label>Voucher date<input id="voucherDate" type="date"></label><label>Payment mode<select id="paymentMode"><option>Cash</option><option>Bank</option><option>Cheque</option><option>UPI</option><option>NEFT/RTGS</option><option>Others</option></select></label></div><label>Narration<input id="narration" value="Reimbursement for travelling expenses"></label></section>
     <section class="card add-expense"><div class="section-head"><div><h2>Add an expense</h2><p>Choose the date of the expense; the time of entry is saved automatically.</p></div><button class="primary" id="addExpense">Save expense</button></div><div class="grid five"><label>Expense date<input id="expenseDate" type="date"></label><label>Description<input id="description" placeholder="e.g. Auto from client office to station"></label><label>Client name<input id="client" placeholder="e.g. Colossa Ventures"></label><label>Amount (Rs.)<input id="amount" type="number" min="0" step="0.01" placeholder="0.00"></label><label>Account head<select id="accountHead"><option>Travelling Expenses</option><option>Petrol & Conveyance</option><option>Staff Welfare</option><option>Filing Fees</option><option>General Office Expenses</option><option>Photocopying Charges</option><option>Postage & Courier</option><option>Payment on Behalf of Client</option></select></label></div><label class="upload"><span>Supporting receipt (image or PDF)</span><input id="receipt" type="file" accept="image/*,application/pdf" capture="environment"><small>On a phone, you can take a receipt photo directly with the camera or choose a PDF.</small></label></section>
     <section class="card"><div class="section-head"><div><h2>Expense list</h2><p>Review or remove expenses before generating the voucher.</p></div><button class="secondary" id="clearAll">Clear all</button></div><div class="table-wrap"><table><thead><tr><th>Expense date</th><th>Description</th><th>Client name</th><th>Account head</th><th>Amount</th><th>Receipt</th><th></th></tr></thead><tbody id="expenseRows"><tr class="empty"><td colspan="7">No expenses saved yet.</td></tr></tbody></table></div></section>
+    <section class="card">
+      <div class="section-head">
+        <div>
+          <h2>Personnel Client Allocation</h2>
+          <p>Specify the personnel names and the respective clients assigned to this engagement summary.</p>
+        </div>
+        <button class="secondary" type="button" id="addAllocationRow">+ Add Personnel Row</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Personnel Name</th>
+              <th>Assigned Client Accounts</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="allocationRows">
+            <tr>
+              <td><input type="text" class="alloc-person" placeholder="e.g. Pranav Nargale"></td>
+              <td><input type="text" class="alloc-client" placeholder="e.g. Colossa Ventures, Thriveni"></td>
+              <td><button type="button" class="remove" onclick="this.closest('tr').remove()">Remove</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
     <section class="generate"><div><h2>Ready to submit?</h2><p>Your PDF includes the formatted voucher, followed by all attached receipts.</p></div><button class="primary large" id="generate">Generate final voucher PDF</button></section>
   </main><div id="toast" role="status"></div><script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script><script src="app.js"></script><script>if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js').catch(()=>{})}</script>
 </body></html>
