@@ -1,0 +1,9 @@
+{
+  "name": "Voucher Maker",
+  "short_name": "Vouchers",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f1fbfa",
+  "theme_color": "#087f7a",
+  "description": "Create reimbursement vouchers and attach receipts."
+}
