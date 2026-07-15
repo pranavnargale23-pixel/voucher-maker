@@ -5,13 +5,14 @@ $('expenseDate').value = today.toISOString().slice(0,10);
 
 // 1. ASYNC DATABASE INITIALIZATION
 let db;
-const dbRequest = indexedDB.open("VoucherEngineDB", 1);
+const dbRequest = indexedDB.open("VoucherEngineDB", 3); // Bumped version to reset schema smoothly
 
 dbRequest.onupgradeneeded = e => {
     db = e.target.result;
-    if (!db.objectStoreNames.contains("expenses")) {
-        db.createObjectStore("expenses", { keyPath: "createdAt" });
+    if (db.objectStoreNames.contains("expenses")) {
+        db.deleteObjectStore("expenses");
     }
+    db.createObjectStore("expenses", { keyPath: "createdAt" });
 };
 
 dbRequest.onsuccess = e => {
@@ -47,6 +48,16 @@ function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currenc
 function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
 
+// Helper to convert File to safe mobile Base64 String data
+function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ dataString: reader.result, type: file.type });
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
 // 2. FETCH FROM DEVICE STORAGE AND RENDER TO LIST
 function loadExpensesFromDevice() {
     if (!db) return;
@@ -68,7 +79,7 @@ function loadExpensesFromDevice() {
                 <td>${esc(x.client)}</td>
                 <td>${esc(x.accountHead)}</td>
                 <td class="amount">${money(x.amount)}</td>
-                <td>${x.fileBlob ? '<span class="receipt">Attached</span>' : '-'}</td>
+                <td>${x.fileDataStr ? '<span class="receipt">Attached</span>' : '-'}</td>
                 <td><button type="button" class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button></td>
             </tr>
         `).join('') : '<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
@@ -77,7 +88,7 @@ function loadExpensesFromDevice() {
 
 function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
 
-// 3. PERSIST RAW FILE AND TRANSACTION VALUES NATIVELY
+// 3. PERSIST TEXT AND CONVERTED RECEIPT SAFELY
 $('addExpense').onclick = async () => {
     if (!db) return alert("Database storage engine is initializing. Please try again in a brief second.");
 
@@ -91,6 +102,19 @@ $('addExpense').onclick = async () => {
         return toast('Please enter expense date, description, client name and amount.');
     }
 
+    let fileDataStr = null;
+    let fileType = null;
+
+    if (file) {
+        try {
+            const encodedFile = await readFileAsBase64(file);
+            fileDataStr = encodedFile.dataString;
+            fileType = encodedFile.type;
+        } catch (err) {
+            return alert("Failed to read the file attachment on this device.");
+        }
+    }
+
     const createdAt = new Date().toISOString();
     const newExpense = {
         createdAt,
@@ -100,7 +124,8 @@ $('addExpense').onclick = async () => {
         amount,
         accountHead: $('accountHead').value,
         fileName: file ? file.name : '',
-        fileBlob: file || null
+        fileDataStr,
+        fileType
     };
 
     const transaction = db.transaction(["expenses"], "readwrite");
@@ -253,11 +278,19 @@ async function voucherPage(pdf, expensesList){
     return page;
 }
 
-async function appendReceipt(pdf, fileData, fileName) {
-    const bytes = await fileData.arrayBuffer();
-    if (fileData.type === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
+async function appendReceipt(pdf, fileDataStr, fileType, fileName) {
+    // Decode Base64 string back into ArrayBuffer chunks for pdf-lib parsing
+    const base64Content = fileDataStr.split(',')[1];
+    const binaryStr = atob(base64Content);
+    const len = binaryStr.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        bytes[i] = binaryStr.charCodeAt(i);
+    }
+
+    if (fileType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf')) {
         try {
-            const src = await PDFLib.PDFDocument.load(bytes);
+            const src = await PDFLib.PDFDocument.load(bytes.buffer);
             const pages = await pdf.copyPages(src, src.getPageIndices());
             pages.forEach(p => pdf.addPage(p));
             return;
@@ -267,7 +300,7 @@ async function appendReceipt(pdf, fileData, fileName) {
     }
     let image;
     try {
-        image = fileData.type.includes('png') ? await pdf.embedPng(bytes) : await pdf.embedJpg(bytes);
+        image = fileType.includes('png') ? await pdf.embedPng(bytes.buffer) : await pdf.embedJpg(bytes.buffer);
     } catch {
         throw new Error(`${fileName} is not a supported image.`);
     }
@@ -297,8 +330,8 @@ $('generate').onclick = async () => {
             await voucherPage(pdf, expensesList);
             
             for (const e of expensesList) {
-                if (e.fileBlob) {
-                    await appendReceipt(pdf, e.fileBlob, e.fileName);
+                if (e.fileDataStr) {
+                    await appendReceipt(pdf, e.fileDataStr, e.fileType, e.fileName);
                 }
             }
             
