@@ -1,3 +1,14 @@
+// Dynamic Row Builder for the new Allocation Grid
+$('addAllocationRow').onclick = () => {
+    const tbody = $('allocationRows');
+    const newRow = document.createElement('tr');
+    newRow.innerHTML = `
+        <td><input type="text" class="alloc-person" placeholder="e.g. Professional Name"></td>
+        <td><input type="text" class="alloc-client" placeholder="e.g. Client Accounts"></td>
+        <td><button type="button" class="remove" onclick="this.closest('tr').remove()">Remove</button></td>
+    `;
+    tbody.appendChild(newRow);
+};
 const $ = id => document.getElementById(id);
 let expenses = JSON.parse(localStorage.getItem('voucher-expenses') || '[]');
 let receipts = new Map();
