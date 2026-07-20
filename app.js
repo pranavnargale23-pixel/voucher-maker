@@ -206,7 +206,7 @@ function words(n){ const a=['','One','Two','Three','Four','Five','Six','Seven','
 function text(page,value,x,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ page.drawText(String(value||''),{x,y,size,font:bold?window.fontBold:window.font, color}); }
 function centeredText(page,value,x,y,width,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ const font=bold?window.fontBold:window.font; const label=String(value||''); page.drawText(label,{x:x+(width-font.widthOfTextAtSize(label,size))/2,y,size,font,color}); }
 function rightText(page,value,right,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ const font=bold?window.fontBold:window.font; const label=String(value||''); page.drawText(label,{x:right-font.widthOfTextAtSize(label,size),y,size,font,color}); }
-function line(page,x1,y1,x2,y2,w=1){ page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.55,.59,.65)}); }
+function line(page,x1,y1,x2,y2,w=1.2){ page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.40,.45,.50)}); }
 
 async function voucherPage(pdf, expensesList){
     const page=pdf.addPage([612,792]),{height:h}=page.getSize();
@@ -216,20 +216,19 @@ async function voucherPage(pdf, expensesList){
     
     page.drawRectangle({x:0,y:h-72,width:612,height:72,color:dark});
     
-    // Change 1: Firm name font size is 18, Cash/Bank Voucher font size is 14
-    text(page,$('firm').value,38,h-32,18,true,white);
-    text(page,'CASH / BANK VOUCHER',38,h-55,14,true,white);
-    text(page,'Voucher No.:',390,h-32,9,false,PDFLib.rgb(.85,.97,.95));
-    text(page,'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}),390,h-49,9,false,PDFLib.rgb(.85,.97,.95));
+    // Header Layout: Left side Firm Name & Title; Right-aligned Voucher No. & Date at margin 574
+    text(page,$('firm').value,38,h-32,16,true,white);
+    text(page,'CASH / BANK VOUCHER',38,h-55,13,true,white);
+    rightText(page,'Voucher No.:',574,h-32,9,false,PDFLib.rgb(.85,.97,.95));
+    rightText(page,'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}),574,h-49,9,false,PDFLib.rgb(.85,.97,.95));
     
     const total=expensesList.reduce((n,x)=>n+x.amount,0);
     let y=680;
     
-    // Change 2: Payment mode stays blank for HR
     [['Pay To',$('payee').value],['Paid by',''],['Narration',$('narration').value]].forEach(([l,v])=>{
         text(page,l+':',38,y,10,true);
         text(page,v,125,y,10);
-        line(page,38,y-8,574,y-8,.5);
+        line(page,38,y-8,574,y-8,1.0);
         y-=31
     });
     
@@ -240,27 +239,29 @@ async function voucherPage(pdf, expensesList){
     [['Account Head',0],['Rupees',1],['Account Head',2],['Rupees',3]].forEach(([v,i])=>centeredText(page,v,aCols[i],y-15,aCols[i+1]-aCols[i],8,true,white));
     y-=22;
     
-    // Change 3: Format account head sums using Indian numbering system
     for(let i=0;i<4;i++){
         const left=accounts[i],right=accounts[i+4];
         text(page,left,42,y-14,8);
         rightText(page,sums[left]?formatIN(sums[left]):'',aCols[2]-5,y-14,8);
         text(page,right,aCols[2]+4,y-14,8);
         rightText(page,sums[right]?formatIN(sums[right]):'',aCols[4]-5,y-14,8);
-        line(page,38,y-22,574,y-22,.4);
+        line(page,38,y-22,574,y-22,1.0);
         y-=22;
     }
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
     centeredText(page,'TOTAL',aCols[2],y-15,aCols[3]-aCols[2],8,true);
     rightText(page,formatIN(total),aCols[4]-5,y-15,8,true);
-    aCols.forEach(x=>line(page,x,accountTop,x,y-22,.4));
+    line(page,38,y-22,574,y-22,1.2);
+    
+    // Outer and vertical thick table borders
+    aCols.forEach(x=>line(page,x,accountTop,x,y-22,1.2));
     
     y-=34;
     text(page,'Rupees in words: '+words(total),38,y,9,true);
     
     y-=25;
-    line(page,38,y,574,y,.7);
+    line(page,38,y,574,y,1.2);
     text(page,$('payee').value,38,y-16,8);
     text(page,'Prepared by',38,y-29,8,true);
     centeredText(page,'Authorized by',220,y-29,128,8,true);
@@ -272,23 +273,25 @@ async function voucherPage(pdf, expensesList){
     heads.forEach((v,i)=>centeredText(page,v,dCols[i],y-15,dCols[i+1]-dCols[i],8,true,white));
     y-=22;
     
-    // Change 3: Format breakdown row amounts using Indian numbering system
     expensesList.forEach(e=>{
         if(y<70)return;
         text(page,savedExpenseDate(e).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}),dCols[0]+4,y-14,8);
         text(page,e.description.slice(0,40),dCols[1]+4,y-14,8);
         text(page,e.client.slice(0,21),dCols[2]+4,y-14,8);
         rightText(page,formatIN(e.amount),dCols[4]-5,y-14,8,true);
-        line(page,38,y-22,574,y-22,.4);
+        line(page,38,y-22,574,y-22,1.0);
         y-=22;
     });
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
     centeredText(page,'TOTAL', dCols[2],y-15,dCols[3]-dCols[2],8,true);
     rightText(page,formatIN(total),dCols[4]-5,y-15,8,true);
-    dCols.forEach(x=>line(page,x,detailTop,x,y-22,.4));
+    line(page,38,y-22,574,y-22,1.2);
+    
+    // Outer and vertical thick table borders
+    dCols.forEach(x=>line(page,x,detailTop,x,y-22,1.2));
 
-    // Change 4: Strict check for personnel allocation table
+    // Personnel Client Allocation Section (Only draws if data exists)
     y-=25;
     const allocRows = document.querySelectorAll('#allocationRows tr');
     let validAllocations = [];
@@ -311,13 +314,15 @@ async function voucherPage(pdf, expensesList){
         validAllocations.forEach(item => {
             text(page, item.person, 45, y - 14, 8);
             text(page, item.clientVal, 245, y - 14, 8);
-            line(page, 38, y - 20, 574, y - 20, .4);
+            line(page, 38, y - 20, 574, y - 20, 1.0);
             y -= 20;
         });
         
-        line(page, 38, tableStart, 38, y, .4);
-        line(page, 238, tableStart, 238, y, .4);
-        line(page, 574, tableStart, 574, y, .4);
+        line(page, 38, tableStart, 38, y, 1.2);
+        line(page, 238, tableStart, 238, y, 1.2);
+        line(page, 574, tableStart, 574, y, 1.2);
+        line(page, 38, tableStart, 574, tableStart, 1.2);
+        line(page, 38, y, 574, y, 1.2);
     }
     
     return page;
