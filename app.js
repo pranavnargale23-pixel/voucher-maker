@@ -25,7 +25,7 @@ dbRequest.onerror = e => {
     alert("Storage Error: " + e.target.error.message);
 };
 
-// Auto-save generic form inputs
+// Auto-save form inputs
 ['firm','payee','narration'].forEach(id => { 
     const v = localStorage.getItem('voucher-'+id); 
     if(v) $(id).value = v; 
@@ -44,9 +44,14 @@ $('addAllocationRow').onclick = () => {
     tbody.appendChild(newRow);
 };
 
-function money(n){return new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR'}).format(n)}
-function esc(v){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
-function savedExpenseDate(expense){return expense.expenseDate?new Date(expense.expenseDate+'T12:00:00'):new Date(expense.createdAt)}
+// Indian Number System Formatter
+function formatIN(n) {
+    return Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function money(n){ return 'Rs. ' + formatIN(n); }
+function esc(v){ return String(v).replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c])); }
+function savedExpenseDate(expense){ return expense.expenseDate ? new Date(expense.expenseDate + 'T12:00:00') : new Date(expense.createdAt); }
 
 function readFileAsBase64(file) {
     return new Promise((resolve, reject) => {
@@ -67,13 +72,13 @@ function loadExpensesFromDevice() {
     request.onsuccess = () => {
         const expensesList = request.result || [];
         const body = $('expenseRows'); 
-        const total = expensesList.reduce((n,x) => n + x.amount, 0); 
+        const total = expensesList.reduce((n, x) => n + x.amount, 0); 
         $('total').textContent = money(total);
         $('itemCount').textContent = `${expensesList.length} expense${expensesList.length === 1 ? '' : 's'}`; 
         
         body.innerHTML = expensesList.length ? expensesList.map((x) => `
             <tr>
-                <td>${savedExpenseDate(x).toLocaleDateString('en-IN',{dateStyle:'medium'})}</td>
+                <td>${savedExpenseDate(x).toLocaleDateString('en-IN', {dateStyle:'medium'})}</td>
                 <td>${esc(x.description)}</td>
                 <td>${esc(x.client)}</td>
                 <td>${esc(x.accountHead)}</td>
@@ -88,7 +93,7 @@ function loadExpensesFromDevice() {
     };
 }
 
-function toast(msg){$('toast').textContent=msg;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2600)}
+function toast(msg){ $('toast').textContent = msg; $('toast').classList.add('show'); setTimeout(() => $('toast').classList.remove('show'), 2600); }
 
 // 3. PERSIST TEXT AND CONVERTED RECEIPT SAFELY
 $('addExpense').onclick = async () => {
@@ -144,7 +149,7 @@ $('addExpense').onclick = async () => {
     addRequest.onerror = e => alert("Failed to save data entry: " + e.target.error.message);
 };
 
-// 4. EDIT FUNCTIONALITY (Populates form fields and removes old entry)
+// 4. EDIT EXPENSE
 window.editExpense = (id) => {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readwrite");
@@ -155,14 +160,12 @@ window.editExpense = (id) => {
         const item = getRequest.result;
         if (!item) return;
 
-        // Populate the input fields with saved details
         $('expenseDate').value = item.expenseDate || '';
         $('description').value = item.description || '';
         $('client').value = item.client || '';
         $('amount').value = item.amount || '';
         $('accountHead').value = item.accountHead || 'Travelling Expenses';
 
-        // Remove old entry from database so re-saving won't duplicate
         store.delete(id);
 
         transaction.oncomplete = () => {
@@ -199,11 +202,11 @@ $('clearAll').onclick = () => {
     }
 };
 
-function words(n){const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];const f=x=>x<20?a[x]:x<100?b[Math.floor(x/10)]+(x%10?' '+a[x%10]:''):x<1000?a[Math.floor(x/100)]+' Hundred'+(x%100?' '+f(x%100):''):x<100000?f(Math.floor(x/1000))+' Thousand'+(x%1000?' '+f(x%1000):''):f(Math.floor(x/100000))+' Lakh'+(x%100000?' '+f(x%100000):'');return f(Math.round(n))+' rupees only';}
-function text(page,value,x,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){page.drawText(String(value||''),{x,y,size,font:bold?window.fontBold:window.font, color});}
-function centeredText(page,value,x,y,width,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){const font=bold?window.fontBold:window.font;const label=String(value||'');page.drawText(label,{x:x+(width-font.widthOfTextAtSize(label,size))/2,y,size,font,color});}
-function rightText(page,value,right,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){const font=bold?window.fontBold:window.font;const label=String(value||'');page.drawText(label,{x:right-font.widthOfTextAtSize(label,size),y,size,font,color});}
-function line(page,x1,y1,x2,y2,w=1){page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.55,.59,.65)});}
+function words(n){ const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'],b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety']; const f=x=>x<20?a[x]:x<100?b[Math.floor(x/10)]+(x%10?' '+a[x%10]:''):x<1000?a[Math.floor(x/100)]+' Hundred'+(x%100?' '+f(x%100):''):x<100000?f(Math.floor(x/1000))+' Thousand'+(x%1000?' '+f(x%1000):''):f(Math.floor(x/100000))+' Lakh'+(x%100000?' '+f(x%100000):''); return f(Math.round(n))+' rupees only'; }
+function text(page,value,x,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ page.drawText(String(value||''),{x,y,size,font:bold?window.fontBold:window.font, color}); }
+function centeredText(page,value,x,y,width,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ const font=bold?window.fontBold:window.font; const label=String(value||''); page.drawText(label,{x:x+(width-font.widthOfTextAtSize(label,size))/2,y,size,font,color}); }
+function rightText(page,value,right,y,size=10,bold=false,color=PDFLib.rgb(.08,.13,.23)){ const font=bold?window.fontBold:window.font; const label=String(value||''); page.drawText(label,{x:right-font.widthOfTextAtSize(label,size),y,size,font,color}); }
+function line(page,x1,y1,x2,y2,w=1){ page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.55,.59,.65)}); }
 
 async function voucherPage(pdf, expensesList){
     const page=pdf.addPage([612,792]),{height:h}=page.getSize();
@@ -212,15 +215,18 @@ async function voucherPage(pdf, expensesList){
     const dark=PDFLib.rgb(.02,.30,.28),teal=PDFLib.rgb(.03,.50,.48),pale=PDFLib.rgb(.91,.98,.97),white=PDFLib.rgb(1,1,1),date=new Date($('voucherDate').value+'T12:00:00');
     
     page.drawRectangle({x:0,y:h-72,width:612,height:72,color:dark});
-    text(page,$('firm').value,38,h-32,14,true,white);
-    text(page,'CASH / BANK VOUCHER',38,h-55,18,true,white);
+    
+    // Change 1: Firm name font size is 18, Cash/Bank Voucher font size is 14
+    text(page,$('firm').value,38,h-32,18,true,white);
+    text(page,'CASH / BANK VOUCHER',38,h-55,14,true,white);
     text(page,'Voucher No.:',390,h-32,9,false,PDFLib.rgb(.85,.97,.95));
     text(page,'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}),390,h-49,9,false,PDFLib.rgb(.85,.97,.95));
     
     const total=expensesList.reduce((n,x)=>n+x.amount,0);
     let y=680;
     
-    [['Pay To',$('payee').value],['Paid by',$('paymentMode').value],['Narration',$('narration').value]].forEach(([l,v])=>{
+    // Change 2: Payment mode stays blank for HR
+    [['Pay To',$('payee').value],['Paid by',''],['Narration',$('narration').value]].forEach(([l,v])=>{
         text(page,l+':',38,y,10,true);
         text(page,v,125,y,10);
         line(page,38,y-8,574,y-8,.5);
@@ -234,19 +240,20 @@ async function voucherPage(pdf, expensesList){
     [['Account Head',0],['Rupees',1],['Account Head',2],['Rupees',3]].forEach(([v,i])=>centeredText(page,v,aCols[i],y-15,aCols[i+1]-aCols[i],8,true,white));
     y-=22;
     
+    // Change 3: Format account head sums using Indian numbering system
     for(let i=0;i<4;i++){
         const left=accounts[i],right=accounts[i+4];
         text(page,left,42,y-14,8);
-        rightText(page,sums[left]?sums[left].toFixed(2):'',aCols[2]-5,y-14,8);
+        rightText(page,sums[left]?formatIN(sums[left]):'',aCols[2]-5,y-14,8);
         text(page,right,aCols[2]+4,y-14,8);
-        rightText(page,sums[right]?sums[right].toFixed(2):'',aCols[4]-5,y-14,8);
+        rightText(page,sums[right]?formatIN(sums[right]):'',aCols[4]-5,y-14,8);
         line(page,38,y-22,574,y-22,.4);
         y-=22;
     }
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
     centeredText(page,'TOTAL',aCols[2],y-15,aCols[3]-aCols[2],8,true);
-    rightText(page,total.toFixed(2),aCols[4]-5,y-15,8,true);
+    rightText(page,formatIN(total),aCols[4]-5,y-15,8,true);
     aCols.forEach(x=>line(page,x,accountTop,x,y-22,.4));
     
     y-=34;
@@ -265,49 +272,47 @@ async function voucherPage(pdf, expensesList){
     heads.forEach((v,i)=>centeredText(page,v,dCols[i],y-15,dCols[i+1]-dCols[i],8,true,white));
     y-=22;
     
+    // Change 3: Format breakdown row amounts using Indian numbering system
     expensesList.forEach(e=>{
         if(y<70)return;
         text(page,savedExpenseDate(e).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}),dCols[0]+4,y-14,8);
         text(page,e.description.slice(0,40),dCols[1]+4,y-14,8);
         text(page,e.client.slice(0,21),dCols[2]+4,y-14,8);
-        rightText(page,e.amount.toFixed(2),dCols[4]-5,y-14,8,true);
+        rightText(page,formatIN(e.amount),dCols[4]-5,y-14,8,true);
         line(page,38,y-22,574,y-22,.4);
         y-=22;
     });
     
     page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
     centeredText(page,'TOTAL', dCols[2],y-15,dCols[3]-dCols[2],8,true);
-    rightText(page,total.toFixed(2),dCols[4]-5,y-15,8,true);
+    rightText(page,formatIN(total),dCols[4]-5,y-15,8,true);
     dCols.forEach(x=>line(page,x,detailTop,x,y-22,.4));
 
-    // Dynamic Personnel Client Allocation Placement
+    // Change 4: Strict check for personnel allocation table
     y-=25;
     const allocRows = document.querySelectorAll('#allocationRows tr');
-    let hasData = false;
+    let validAllocations = [];
     
     allocRows.forEach(row => {
-        if(row.querySelector('.alloc-person').value.trim() || row.querySelector('.alloc-client').value.trim()) {
-            hasData = true;
+        const person = row.querySelector('.alloc-person')?.value.trim() || '';
+        const clientVal = row.querySelector('.alloc-client')?.value.trim() || '';
+        if (person || clientVal) {
+            validAllocations.push({ person, clientVal });
         }
     });
 
-    if (hasData && y > 90) {
+    if (validAllocations.length > 0 && y > 90) {
         page.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
         centeredText(page, 'Personnel Name', 38, y - 12, 200, 8, true, white);
         centeredText(page, 'Assigned Client Accounts', 238, y - 12, 336, 8, true, white);
         y -= 18;
         
         const tableStart = y;
-        allocRows.forEach(row => {
-            const person = row.querySelector('.alloc-person').value.trim();
-            const clientVal = row.querySelector('.alloc-client').value.trim();
-            
-            if (person || clientVal) {
-                text(page, person, 45, y - 14, 8);
-                text(page, clientVal, 245, y - 14, 8);
-                line(page, 38, y - 20, 574, y - 20, .4);
-                y -= 20;
-            }
+        validAllocations.forEach(item => {
+            text(page, item.person, 45, y - 14, 8);
+            text(page, item.clientVal, 245, y - 14, 8);
+            line(page, 38, y - 20, 574, y - 20, .4);
+            y -= 20;
         });
         
         line(page, 38, tableStart, 38, y, .4);
