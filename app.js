@@ -25,7 +25,7 @@ dbRequest.onerror = e => {
     alert("Storage Error: " + e.target.error.message);
 };
 
-// Auto-save form inputs
+// Auto-save generic form inputs
 ['firm','payee','narration'].forEach(id => { 
     const v = localStorage.getItem('voucher-'+id); 
     if(v) $(id).value = v; 
@@ -79,7 +79,10 @@ function loadExpensesFromDevice() {
                 <td>${esc(x.accountHead)}</td>
                 <td class="amount">${money(x.amount)}</td>
                 <td>${x.fileDataStr ? '<span class="receipt">Attached</span>' : '-'}</td>
-                <td><button type="button" class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button></td>
+                <td>
+                    <button type="button" class="secondary" style="min-height:32px;padding:6px 9px;font-size:12px;margin-right:6px;" onclick="editExpense('${x.createdAt}')">Edit</button>
+                    <button type="button" class="remove" onclick="deleteExpense('${x.createdAt}')">Remove</button>
+                </td>
             </tr>
         `).join('') : '<tr class="empty"><td colspan="7">No expenses saved yet.</td></tr>'; 
     };
@@ -141,6 +144,36 @@ $('addExpense').onclick = async () => {
     addRequest.onerror = e => alert("Failed to save data entry: " + e.target.error.message);
 };
 
+// 4. EDIT FUNCTIONALITY (Populates form fields and removes old entry)
+window.editExpense = (id) => {
+    if (!db) return;
+    const transaction = db.transaction(["expenses"], "readwrite");
+    const store = transaction.objectStore("expenses");
+    const getRequest = store.get(id);
+
+    getRequest.onsuccess = () => {
+        const item = getRequest.result;
+        if (!item) return;
+
+        // Populate the input fields with saved details
+        $('expenseDate').value = item.expenseDate || '';
+        $('description').value = item.description || '';
+        $('client').value = item.client || '';
+        $('amount').value = item.amount || '';
+        $('accountHead').value = item.accountHead || 'Travelling Expenses';
+
+        // Remove old entry from database so re-saving won't duplicate
+        store.delete(id);
+
+        transaction.oncomplete = () => {
+            loadExpensesFromDevice();
+            document.querySelector('.add-expense').scrollIntoView({ behavior: 'smooth' });
+            toast('Expense loaded into form for editing.');
+        };
+    };
+};
+
+// 5. REMOVE RECORD NATIVELY
 window.deleteExpense = (id) => {
     if (!db) return;
     const transaction = db.transaction(["expenses"], "readwrite");
@@ -152,6 +185,7 @@ window.deleteExpense = (id) => {
     };
 };
 
+// 6. PURGE DEVICE DATA STORE
 $('clearAll').onclick = () => {
     if (!db) return;
     if (confirm('Clear all saved expenses from this device?')) {
@@ -246,7 +280,7 @@ async function voucherPage(pdf, expensesList){
     rightText(page,total.toFixed(2),dCols[4]-5,y-15,8,true);
     dCols.forEach(x=>line(page,x,detailTop,x,y-22,.4));
 
-    // --- Dynamic Personnel Client Allocation Placement (Only draws if data is present) ---
+    // Dynamic Personnel Client Allocation Placement
     y-=25;
     const allocRows = document.querySelectorAll('#allocationRows tr');
     let hasData = false;
@@ -314,7 +348,7 @@ async function appendReceipt(pdf, fileDataStr, fileType, fileName) {
     page.drawImage(image, {x:(width-image.width*scale)/2, y:(height-image.height*scale)/2-4, width:image.width*scale, height:image.height*scale});
 }
 
-// 6. COMPILE LEDGER
+// 7. COMPILE LEDGER
 $('generate').onclick = async () => {
     if (!db) return toast("Database engine not ready.");
     const transaction = db.transaction(["expenses"], "readonly");
