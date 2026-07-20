@@ -209,90 +209,129 @@ function rightText(page,value,right,y,size=10,bold=false,color=PDFLib.rgb(.08,.1
 function line(page,x1,y1,x2,y2,w=1.2){ page.drawLine({start:{x:x1,y:y1},end:{x:x2,y:y2},thickness:w,color:PDFLib.rgb(.40,.45,.50)}); }
 
 async function voucherPage(pdf, expensesList){
-    const page=pdf.addPage([612,792]),{height:h}=page.getSize();
-    window.font=await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
-    window.fontBold=await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
-    const dark=PDFLib.rgb(.02,.30,.28),teal=PDFLib.rgb(.03,.50,.48),pale=PDFLib.rgb(.91,.98,.97),white=PDFLib.rgb(1,1,1),date=new Date($('voucherDate').value+'T12:00:00');
+    let page = pdf.addPage([612,792]);
+    const {height:h} = page.getSize();
+    window.font = await pdf.embedFont(PDFLib.StandardFonts.Helvetica);
+    window.fontBold = await pdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
+    const dark = PDFLib.rgb(.02,.30,.28), teal = PDFLib.rgb(.03,.50,.48), pale = PDFLib.rgb(.91,.98,.97), white = PDFLib.rgb(1,1,1), date = new Date($('voucherDate').value+'T12:00:00');
     
-    page.drawRectangle({x:0,y:h-72,width:612,height:72,color:dark});
+    // Banner
+    page.drawRectangle({x:0, y:h-72, width:612, height:72, color:dark});
+    text(page, $('firm').value, 38, h-32, 16, true, white);
+    text(page, 'CASH / BANK VOUCHER', 38, h-55, 13, true, white);
+    rightText(page, 'Voucher No.:', 574, h-32, 9, false, PDFLib.rgb(.85,.97,.95));
+    rightText(page, 'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}), 574, h-49, 9, false, PDFLib.rgb(.85,.97,.95));
     
-    // Header Layout: Left side Firm Name & Title; Right-aligned Voucher No. & Date at margin 574
-    text(page,$('firm').value,38,h-32,16,true,white);
-    text(page,'CASH / BANK VOUCHER',38,h-55,13,true,white);
-    rightText(page,'Voucher No.:',574,h-32,9,false,PDFLib.rgb(.85,.97,.95));
-    rightText(page,'Date: '+date.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'}),574,h-49,9,false,PDFLib.rgb(.85,.97,.95));
+    const total = expensesList.reduce((n,x) => n + x.amount, 0);
+    let y = 680;
     
-    const total=expensesList.reduce((n,x)=>n+x.amount,0);
-    let y=680;
-    
-    [['Pay To',$('payee').value],['Paid by',''],['Narration',$('narration').value]].forEach(([l,v])=>{
-        text(page,l+':',38,y,10,true);
-        text(page,v,125,y,10);
-        line(page,38,y-8,574,y-8,1.0);
-        y-=31
+    [['Pay To',$('payee').value],['Paid by',''],['Narration',$('narration').value]].forEach(([l,v]) => {
+        text(page, l+':', 38, y, 10, true);
+        text(page, v, 125, y, 10);
+        line(page, 38, y-8, 574, y-8, 1.0);
+        y -= 31;
     });
     
-    const accounts=['Filing Fees','General Office Expenses','Payment on Behalf of Client','Petrol & Conveyance','Photocopying Charges','Postage & Courier','Staff Welfare','Travelling Expenses'],sums=Object.fromEntries(accounts.map(a=>[a,0])),aCols=[38,244,306,512,574],accountTop=y;
-    expensesList.forEach(e=>sums[e.accountHead]=(sums[e.accountHead]||0)+e.amount);
+    const accounts = ['Filing Fees','General Office Expenses','Payment on Behalf of Client','Petrol & Conveyance','Photocopying Charges','Postage & Courier','Staff Welfare','Travelling Expenses'];
+    const sums = Object.fromEntries(accounts.map(a => [a,0]));
+    const aCols = [38,244,306,512,574];
+    const accountTop = y;
+
+    expensesList.forEach(e => sums[e.accountHead] = (sums[e.accountHead]||0) + e.amount);
     
-    page.drawRectangle({x:38,y:y-22,width:536,height:22,color:teal});
-    [['Account Head',0],['Rupees',1],['Account Head',2],['Rupees',3]].forEach(([v,i])=>centeredText(page,v,aCols[i],y-15,aCols[i+1]-aCols[i],8,true,white));
-    y-=22;
+    page.drawRectangle({x:38, y:y-22, width:536, height:22, color:teal});
+    [['Account Head',0],['Rupees',1],['Account Head',2],['Rupees',3]].forEach(([v,i]) => centeredText(page, v, aCols[i], y-15, aCols[i+1]-aCols[i], 8, true, white));
+    y -= 22;
     
-    for(let i=0;i<4;i++){
-        const left=accounts[i],right=accounts[i+4];
-        text(page,left,42,y-14,8);
-        rightText(page,sums[left]?formatIN(sums[left]):'',aCols[2]-5,y-14,8);
-        text(page,right,aCols[2]+4,y-14,8);
-        rightText(page,sums[right]?formatIN(sums[right]):'',aCols[4]-5,y-14,8);
-        line(page,38,y-22,574,y-22,1.0);
-        y-=22;
+    for(let i=0; i<4; i++){
+        const left = accounts[i], right = accounts[i+4];
+        text(page, left, 42, y-14, 8);
+        rightText(page, sums[left] ? formatIN(sums[left]) : '', aCols[2]-5, y-14, 8);
+        text(page, right, aCols[2]+4, y-14, 8);
+        rightText(page, sums[right] ? formatIN(sums[right]) : '', aCols[4]-5, y-14, 8);
+        line(page, 38, y-22, 574, y-22, 1.0);
+        y -= 22;
     }
     
-    page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
-    centeredText(page,'TOTAL',aCols[2],y-15,aCols[3]-aCols[2],8,true);
-    rightText(page,formatIN(total),aCols[4]-5,y-15,8,true);
-    line(page,38,y-22,574,y-22,1.2);
+    page.drawRectangle({x:38, y:y-22, width:536, height:22, color:pale});
+    centeredText(page, 'TOTAL', aCols[2], y-15, aCols[3]-aCols[2], 8, true);
+    rightText(page, formatIN(total), aCols[4]-5, y-15, 8, true);
+    line(page, 38, y-22, 574, y-22, 1.2);
+    aCols.forEach(x => line(page, x, accountTop, x, y-22, 1.2));
     
-    // Outer and vertical thick table borders
-    aCols.forEach(x=>line(page,x,accountTop,x,y-22,1.2));
+    y -= 34;
+    text(page, 'Rupees in words: ' + words(total), 38, y, 9, true);
     
-    y-=34;
-    text(page,'Rupees in words: '+words(total),38,y,9,true);
+    y -= 25;
+    line(page, 38, y, 574, y, 1.2);
+    text(page, $('payee').value, 38, y-16, 8);
+    text(page, 'Prepared by', 38, y-29, 8, true);
+    centeredText(page, 'Authorized by', 220, y-29, 128, 8, true);
+    centeredText(page, "Receiver's Signature", 430, y-29, 144, 8, true);
     
-    y-=25;
-    line(page,38,y,574,y,1.2);
-    text(page,$('payee').value,38,y-16,8);
-    text(page,'Prepared by',38,y-29,8,true);
-    centeredText(page,'Authorized by',220,y-29,128,8,true);
-    centeredText(page,"Receiver's Signature",430,y-29,144,8,true);
-    
-    y-=50;
-    const dCols=[38,100,355,500,574],detailTop=y,heads=['Date','Particulars','Client Name','Amount (Rs.)'];
-    page.drawRectangle({x:38,y:y-22,width:536,height:22,color:teal});
-    heads.forEach((v,i)=>centeredText(page,v,dCols[i],y-15,dCols[i+1]-dCols[i],8,true,white));
-    y-=22;
-    
-    expensesList.forEach(e=>{
-        if(y<70)return;
-        text(page,savedExpenseDate(e).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}),dCols[0]+4,y-14,8);
-        text(page,e.description.slice(0,40),dCols[1]+4,y-14,8);
-        text(page,e.client.slice(0,21),dCols[2]+4,y-14,8);
-        rightText(page,formatIN(e.amount),dCols[4]-5,y-14,8,true);
-        line(page,38,y-22,574,y-22,1.0);
-        y-=22;
-    });
-    
-    page.drawRectangle({x:38,y:y-22,width:536,height:22,color:pale});
-    centeredText(page,'TOTAL', dCols[2],y-15,dCols[3]-dCols[2],8,true);
-    rightText(page,formatIN(total),dCols[4]-5,y-15,8,true);
-    line(page,38,y-22,574,y-22,1.2);
-    
-    // Outer and vertical thick table borders
-    dCols.forEach(x=>line(page,x,detailTop,x,y-22,1.2));
+    y -= 50;
 
-    // Personnel Client Allocation Section (Only draws if data exists)
-    y-=25;
+    // --- MULTI-PAGE EXPENSE DETAILS TABLE ---
+    const dCols = [38, 100, 355, 500, 574];
+    const heads = ['Date', 'Particulars', 'Client Name', 'Amount (Rs.)'];
+
+    function drawTableHeader(p, startY) {
+        p.drawRectangle({x:38, y:startY-22, width:536, height:22, color:teal});
+        heads.forEach((v,i) => centeredText(p, v, dCols[i], startY-15, dCols[i+1]-dCols[i], 8, true, white));
+        return startY - 22;
+    }
+
+    function createContinuationPage() {
+        let newPage = pdf.addPage([612,792]);
+        newPage.drawRectangle({x:0, y:792-40, width:612, height:40, color:dark});
+        text(newPage, $('firm').value + ' - CASH / BANK VOUCHER (Contd.)', 38, 792-25, 12, true, white);
+        return newPage;
+    }
+
+    let currentPage = page;
+    let pageDetailTop = y;
+    y = drawTableHeader(currentPage, y);
+
+    expensesList.forEach((e) => {
+        // If remaining height on current page is less than 65pt (space for row + bottom padding), create a continuation page
+        if (y < 65) {
+            // Close vertical lines on current page
+            dCols.forEach(x => line(currentPage, x, pageDetailTop, x, y, 1.2));
+            line(currentPage, 38, y, 574, y, 1.2);
+
+            currentPage = createContinuationPage();
+            y = 792 - 60;
+            pageDetailTop = y;
+            y = drawTableHeader(currentPage, y);
+        }
+
+        text(currentPage, savedExpenseDate(e).toLocaleDateString('en-IN', {day:'2-digit', month:'short', year:'2-digit'}), dCols[0]+4, y-14, 8);
+        text(currentPage, e.description.slice(0,40), dCols[1]+4, y-14, 8);
+        text(currentPage, e.client.slice(0,21), dCols[2]+4, y-14, 8);
+        rightText(currentPage, formatIN(e.amount), dCols[4]-5, y-14, 8, true);
+        line(currentPage, 38, y-22, 574, y-22, 1.0);
+        y -= 22;
+    });
+
+    // Handle Total Row space check
+    if (y < 50) {
+        dCols.forEach(x => line(currentPage, x, pageDetailTop, x, y, 1.2));
+        line(currentPage, 38, y, 574, y, 1.2);
+
+        currentPage = createContinuationPage();
+        y = 792 - 60;
+        pageDetailTop = y;
+        y = drawTableHeader(currentPage, y);
+    }
+
+    currentPage.drawRectangle({x:38, y:y-22, width:536, height:22, color:pale});
+    centeredText(currentPage, 'TOTAL', dCols[2], y-15, dCols[3]-dCols[2], 8, true);
+    rightText(currentPage, formatIN(total), dCols[4]-5, y-15, 8, true);
+    line(currentPage, 38, y-22, 574, y-22, 1.2);
+    dCols.forEach(x => line(currentPage, x, pageDetailTop, x, y-22, 1.2));
+
+    // --- PERSONNEL CLIENT ALLOCATION SECTION ---
+    y -= 25;
     const allocRows = document.querySelectorAll('#allocationRows tr');
     let validAllocations = [];
     
@@ -304,25 +343,31 @@ async function voucherPage(pdf, expensesList){
         }
     });
 
-    if (validAllocations.length > 0 && y > 90) {
-        page.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
-        centeredText(page, 'Personnel Name', 38, y - 12, 200, 8, true, white);
-        centeredText(page, 'Assigned Client Accounts', 238, y - 12, 336, 8, true, white);
+    if (validAllocations.length > 0) {
+        let neededSpace = 20 + (validAllocations.length * 20) + 20;
+        if (y - neededSpace < 40) {
+            currentPage = createContinuationPage();
+            y = 792 - 60;
+        }
+
+        currentPage.drawRectangle({ x: 38, y: y - 18, width: 536, height: 18, color: teal });
+        centeredText(currentPage, 'Personnel Name', 38, y - 12, 200, 8, true, white);
+        centeredText(currentPage, 'Assigned Client Accounts', 238, y - 12, 336, 8, true, white);
         y -= 18;
         
         const tableStart = y;
         validAllocations.forEach(item => {
-            text(page, item.person, 45, y - 14, 8);
-            text(page, item.clientVal, 245, y - 14, 8);
-            line(page, 38, y - 20, 574, y - 20, 1.0);
+            text(currentPage, item.person, 45, y - 14, 8);
+            text(currentPage, item.clientVal, 245, y - 14, 8);
+            line(currentPage, 38, y - 20, 574, y - 20, 1.0);
             y -= 20;
         });
         
-        line(page, 38, tableStart, 38, y, 1.2);
-        line(page, 238, tableStart, 238, y, 1.2);
-        line(page, 574, tableStart, 574, y, 1.2);
-        line(page, 38, tableStart, 574, tableStart, 1.2);
-        line(page, 38, y, 574, y, 1.2);
+        line(currentPage, 38, tableStart, 38, y, 1.2);
+        line(currentPage, 238, tableStart, 238, y, 1.2);
+        line(currentPage, 574, tableStart, 574, y, 1.2);
+        line(currentPage, 38, tableStart, 574, tableStart, 1.2);
+        line(currentPage, 38, y, 574, y, 1.2);
     }
     
     return page;
